@@ -1,5 +1,6 @@
 import tkinter as tk
 import time
+from MiniMax import minimax
 # --- Import the actual Connect4Board class ---
 # Make sure Board.py is in the same directory or accessible
 try:
@@ -65,6 +66,9 @@ class Connect4GUI:
         self.message_label_var = tk.StringVar()
         self.message_label = tk.Label(root, textvariable=self.message_label_var, font=("Arial", 16, "bold"), pady=5)
         self.message_label.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
+        self.score_label_var = tk.StringVar()
+        self.score_label = tk.Label(root, textvariable=self.score_label_var, font=("Arial", 14))
+        self.score_label.grid(row=1, column=0, sticky="ew", padx=10, pady=(0,5))
 
         self.button_frame = tk.Frame(root)
         self.button_frame.grid(row=2, column=0, pady=(0, 10))
@@ -83,6 +87,22 @@ class Connect4GUI:
         self.canvas.bind("<Button-1>", self.handle_click)
         self.canvas.bind("<Motion>", self.handle_mouse_motion)
         self.canvas.bind("<Leave>", self.handle_mouse_leave)
+
+    def update_score_display(self):
+        p1_score = self.board.connect_4s(1)
+        p2_score = self.board.connect_4s(2)
+
+        if p1_score > p2_score:
+            winner = " ⬅ Leader"
+        elif p2_score > p1_score:
+            winner = " ⬅ Leader"
+        else:
+            winner = ""
+
+        self.score_label_var.set(
+            f"Player 1 (Red): {p1_score}{' ⬅ Leader' if p1_score > p2_score else ''}  |  "
+            f"Player 2 (Yellow): {p2_score}{' ⬅ Leader' if p2_score > p1_score else ''}"
+        )
 
     def draw_board(self):
         """Draw the Connect 4 board graphically based on bitboards."""
@@ -161,28 +181,26 @@ class Connect4GUI:
         self.hover_preview_id = self.canvas.create_oval(x0, y0, x1, y1, fill=color, outline="", tags="hover", stipple="gray50")
 
     def handle_click(self, event):
-        if self.game_over or self.is_animating:
+        """Handle user clicks and make a move if it's the user's turn."""
+        if self.game_over or self.is_animating or self.current_player == 2:  # Block clicks during AI's turn
             return
         col = event.x // self.SQUARE_SIZE
-        # Use valid_moves() from the actual board class
         if col not in self.board.valid_moves():
             self.update_message("Invalid move. Try again.")
             self.root.after(1500, self.update_message)
             return
         self.clear_hover()
         self.is_animating = True
-        self._update_button_states() # Disable undo during animation
-        # Use height() from the actual board class
-        target_row = self.board.height(col) # Get target row before animating
-        self.animate_drop(col, target_row) # Pass target_row
+        self._update_button_states()
+        target_row = self.board.height(col)
+        self.animate_drop(col, target_row, is_ai=False)
 
-    # --- Modified animate_drop to take target_row ---
-    def animate_drop(self, col, target_row):
-        if target_row == self.ROWS: # Check if column is full (height returns 6 for full)
-             self.is_animating = False
-             self._update_button_states()
-             print("Error: Tried to animate into a full column.") # Should be caught by handle_click
-             return
+    def animate_drop(self, col, target_row, is_ai):
+        """Animate the piece dropping into the column."""
+        if target_row == self.ROWS:
+            self.is_animating = False
+            self._update_button_states()
+            return
 
         color = self.PLAYER1_COLOR if self.current_player == 1 else self.PLAYER2_COLOR
         center_x = col * self.SQUARE_SIZE + self.SQUARE_SIZE // 2
@@ -191,58 +209,161 @@ class Connect4GUI:
         current_y = self.SQUARE_SIZE // 2
         x0 = center_x - self.RADIUS
         x1 = center_x + self.RADIUS
-        piece_id = self.canvas.create_oval(x0, current_y - self.RADIUS, x1, current_y + self.RADIUS, fill=color, outline=self.BOARD_COLOR, width=2)
+        piece_id = self.canvas.create_oval(x0, current_y - self.RADIUS, x1, current_y + self.RADIUS, fill=color,
+                                           outline=self.BOARD_COLOR, width=2)
 
         def step_animation():
             nonlocal current_y
             current_y += self.ANIMATION_STEP
             if current_y >= target_center_y:
                 self.canvas.delete(piece_id)
-                # --- Use move() from the actual board class ---
                 try:
                     self.board.move(col, self.current_player)
-                    # --- Add move to history AFTER successful board move ---
                     self.move_history.append((col, self.current_player))
                 except ValueError as e:
-                    print(f"Error during board move: {e}") # Should not happen ideally
-                    # Handle potential errors if move fails unexpectedly
                     self.is_animating = False
                     self._update_button_states()
                     self.update_message("An error occurred. Please restart.")
                     return
 
-                self.draw_board() # Redraw AFTER board state is updated
-                self.is_animating = False # Unlock clicks/buttons AFTER drawing
-                self.check_game_state() # Check win/draw/next turn
-                self._update_button_states() # Update button state AFTER animation/checks
+                self.draw_board()
+                self.is_animating = False
+                self.check_game_state(is_ai)
+                self._update_button_states()
             else:
                 self.canvas.coords(piece_id, x0, current_y - self.RADIUS, x1, current_y + self.RADIUS)
                 self.root.after(self.ANIMATION_SPEED, step_animation)
 
         step_animation()
 
-    def check_game_state(self):
-        """Check the game state after a move using the actual board's methods."""
-        winner = self.current_player
+    def show_tree(self, root_node, time_taken=None):
+        import tkinter as tk
 
-        # --- Use connect_4s() from the actual board class ---
-        if self.board.connect_4s(winner) > 0: # Check if count > 0
-            self.game_over = True
-            self.update_message(f"Player {winner} wins!")
-            self._update_button_states()
-            return
+        tree_window = tk.Toplevel(self.root)
+        tree_window.title("Minimax Tree")
 
-        # --- Check draw using valid_moves() ---
+        # Create a Frame to hold canvas and scrollbars
+        frame = tk.Frame(tree_window)
+        frame.pack(fill="both", expand=True)
+
+        # Add time information at the top if available
+        if time_taken is not None:
+            time_label = tk.Label(
+                frame,
+                text=f"Time taken for minimax: {time_taken:.4f} seconds",
+                font=("Arial", 12, "bold")
+            )
+            time_label.pack(side="top", pady=5)
+
+        canvas = tk.Canvas(frame, width=800, height=600, bg="white", scrollregion=(0, 0, 5000, 5000))
+        canvas.pack(side="left", fill="both", expand=True)
+
+        # Add scrollbars
+        hbar = tk.Scrollbar(frame, orient="horizontal", command=canvas.xview)
+        hbar.pack(side="bottom", fill="x")
+        vbar = tk.Scrollbar(frame, orient="vertical", command=canvas.yview)
+        vbar.pack(side="right", fill="y")
+
+        canvas.configure(xscrollcommand=hbar.set, yscrollcommand=vbar.set)
+
+        # Zoom and pan support
+        scale = [1.0]
+
+        def zoom(event):
+            if event.state & 0x0004:  # Ctrl is held
+                # Normalize event.delta for consistent behavior across platforms
+                delta = event.delta if event.delta != 0 else (1 if event.num == 4 else -1)
+                factor = 1.1 if delta > 0 else 0.9  # Zoom in for positive delta, out for negative
+                scale[0] *= factor
+                canvas.scale("all", canvas.canvasx(event.x), canvas.canvasy(event.y), factor, factor)
+                # Adjust scroll region dynamically
+                canvas.configure(scrollregion=canvas.bbox("all"))
+
+        # Bindings for different platforms
+        canvas.bind("<MouseWheel>", zoom)  # Windows and macOS
+        canvas.bind("<Button-4>", lambda e: zoom(e))  # Linux scroll up
+        canvas.bind("<Button-5>", lambda e: zoom(e))  # Linux scroll down
+
+        # Drag to move view (panning)
+        def start_pan(event):
+            canvas.scan_mark(event.x, event.y)
+
+        def do_pan(event):
+            canvas.scan_dragto(event.x, event.y, gain=1)
+
+        canvas.bind("<ButtonPress-2>", start_pan)  # Middle mouse button press
+        canvas.bind("<B2-Motion>", do_pan)
+
+        # Also allow dragging with Shift + Left Click
+        canvas.bind("<Shift-ButtonPress-1>", start_pan)
+        canvas.bind("<Shift-B1-Motion>", do_pan)
+
+        # Recursive function to draw nodes
+        def draw_node(node, x, y, depth=0):
+            radius = 30
+            canvas.create_oval(x - radius, y - radius, x + radius, y + radius, fill="#D3D3D3", tags="all")
+            canvas.create_text(x, y, text=f"Score: {node.score}\nCol: {node.move}", font=("Arial", 8), tags="all")
+
+            child_x = x - 100 + depth * 20
+            child_y = y + 100
+            for child in node.children:
+                canvas.create_line(x, y + radius, child_x, child_y - radius, tags="all")
+                draw_node(child, child_x, child_y, depth + 1)
+                child_x += 120
+
+        draw_node(root_node, 1000, 50)
+
+    def check_game_state(self, is_ai):
+        """Check the game state and switch turns."""
+        self.update_score_display()
+
         if not self.board.valid_moves():
             self.game_over = True
-            self.update_message("It's a draw!")
+            p1_score = self.board.connect_4s(1)
+            p2_score = self.board.connect_4s(2)
+            if p1_score > p2_score:
+                self.update_message("Game Over! Player 1 wins by score!")
+            elif p2_score > p1_score:
+                self.update_message("Game Over! Player 2 wins by score!")
+            else:
+                self.update_message("Game Over! It's a draw!")
             self._update_button_states()
             return
 
-        # Switch players if game not over
         self.current_player = 2 if self.current_player == 1 else 1
-        self.update_message()
-        self._update_button_states() # Update buttons for next turn
+        if self.current_player == 2 and not self.game_over:
+            self.root.after(500, self.ai_move)
+        else:
+            self.update_message()
+            self._update_button_states()
+
+    def ai_move(self):
+        """Make a move for the AI using the enhanced minimax algorithm with alpha-beta pruning and save the decision tree."""
+        if self.game_over:
+            return
+
+        # Start timing the minimax calculation
+        start_time = time.time()
+
+        # AI is Player 2, so maximizing_player = False
+        best_col, _, self.minimax_tree_root = minimax(
+            self.board,
+            depth=5,
+            alpha=float('-inf'),
+            beta=float('inf'),
+            maximizing_player=False,
+            return_tree=True
+        )
+
+        # Calculate time taken
+        time_taken = time.time() - start_time
+
+        if best_col is not None:
+            target_row = self.board.height(best_col)
+            self.animate_drop(best_col, target_row, is_ai=True)
+
+            # Pass the time taken to show_tree
+            self.show_tree(self.minimax_tree_root, time_taken)
 
     # --- Undo Action Implementation ---
     def undo_action(self):
@@ -288,6 +409,7 @@ class Connect4GUI:
         self.draw_board()
         self.update_message()
         self._update_button_states() # Reset button states
+        self.update_score_display()
 
 
 if __name__ == "__main__":
