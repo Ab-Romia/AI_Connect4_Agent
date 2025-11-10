@@ -1,0 +1,14 @@
+# AI Connect 4 miniMAX - Python Dependencies
+# This project uses Python standard library only
+# Minimum Python version: 3.7
+
+# No external dependencies required!
+# The following are included in Python standard library:
+# - tkinter (GUI framework - usually pre-installed with Python)
+# - time (for timing measurements)
+# - os (for CLI utilities)
+
+# Optional development dependencies (uncomment if needed):
+# pytest>=7.0.0  # For running tests
+# black>=22.0.0  # For code formatting
+# flake8>=4.0.0  # For linting
