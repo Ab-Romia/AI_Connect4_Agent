@@ -176,13 +176,15 @@ custom_css = """
     }
 
     #game-board-canvas {
-        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-        border-radius: 20px;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-        cursor: pointer;
-        display: block;
-        margin: 0 auto;
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%) !important;
+        border-radius: 20px !important;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3) !important;
+        cursor: pointer !important;
+        display: block !important;
+        margin: 0 auto !important;
         transition: transform 0.3s ease;
+        max-width: 100% !important;
+        height: auto !important;
     }
 
     #game-board-canvas:hover {
@@ -286,13 +288,24 @@ custom_js = """
 class Connect4Game {
     constructor() {
         this.canvas = document.getElementById('game-board-canvas');
+        if (!this.canvas) {
+            console.error('Canvas element not found!');
+            throw new Error('Canvas element not found');
+        }
+
         this.ctx = this.canvas.getContext('2d');
+        if (!this.ctx) {
+            console.error('Could not get 2D context!');
+            throw new Error('Could not get 2D context');
+        }
+
         this.rows = 6;
         this.cols = 7;
         this.cellSize = 80;
         this.padding = 10;
         this.radius = (this.cellSize - this.padding * 2) / 2;
 
+        // Set canvas dimensions
         this.canvas.width = this.cols * this.cellSize;
         this.canvas.height = (this.rows + 1) * this.cellSize;
 
@@ -313,6 +326,8 @@ class Connect4Game {
 
         this.setupEventListeners();
         this.animate();
+
+        console.log('Connect4Game initialized with canvas', this.canvas.width, 'x', this.canvas.height);
     }
 
     setupEventListeners() {
@@ -441,14 +456,12 @@ class Connect4Game {
     }
 
     drawBoard() {
-        if (!this.boardState) return;
-
         for (let row = 0; row < this.rows; row++) {
             for (let col = 0; col < this.cols; col++) {
                 const x = col * this.cellSize + this.cellSize / 2;
                 const y = (this.rows - row) * this.cellSize + this.cellSize / 2;
 
-                const cellValue = this.boardState.board[row][col];
+                const cellValue = this.boardState ? this.boardState.board[row][col] : 0;
                 let color = this.colors.empty;
 
                 if (cellValue === 1) {
@@ -565,10 +578,48 @@ class Connect4Game {
     }
 }
 
-// Initialize game when page loads
-window.addEventListener('load', () => {
-    window.game = new Connect4Game();
-});
+// Initialize game with retry mechanism for Gradio
+function initializeGame() {
+    const canvas = document.getElementById('game-board-canvas');
+    if (canvas && !window.game) {
+        try {
+            window.game = new Connect4Game();
+            console.log('Connect4 game initialized successfully');
+
+            // Initialize with empty board
+            const initialState = {
+                board: Array(6).fill(null).map(() => Array(7).fill(0)),
+                currentPlayer: 1,
+                gameOver: false,
+                winner: null,
+                winningCells: [],
+                player1Score: 0,
+                player2Score: 0
+            };
+            window.game.updateBoard(JSON.stringify(initialState));
+        } catch (e) {
+            console.error('Failed to initialize game:', e);
+        }
+    } else if (!canvas) {
+        // Retry if canvas not found
+        setTimeout(initializeGame, 100);
+    }
+}
+
+// Multiple initialization attempts
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeGame);
+} else {
+    initializeGame();
+}
+
+// Also try on window load
+window.addEventListener('load', initializeGame);
+
+// Watch for Gradio's dynamic content
+setTimeout(initializeGame, 500);
+setTimeout(initializeGame, 1000);
+setTimeout(initializeGame, 2000);
 </script>
 """
 
@@ -587,17 +638,30 @@ with gr.Blocks(title="Connect 4 AI - Beautiful Edition", theme=gr.themes.Soft())
         """)
 
         # Game board canvas
-        gr.HTML('<canvas id="game-board-canvas"></canvas>')
+        gr.HTML('''
+            <div style="text-align: center; margin: 20px 0;">
+                <canvas id="game-board-canvas"
+                        width="560"
+                        height="560"
+                        style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+                               border-radius: 20px;
+                               box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                               cursor: pointer;
+                               display: block;
+                               margin: 0 auto;
+                               max-width: 100%;">
+                    Your browser does not support the canvas element.
+                </canvas>
+            </div>
+        ''')
 
         # Status panel
-        with gr.Column():
+        with gr.Column(elem_class="status-panel"):
             status_display = gr.HTML(value="""
-                <div class="status-panel">
-                    <div class="status-message">🔴 Your Turn - Click a column!</div>
-                    <div class="score-display">
-                        <div class="player-score">🔴 You: 0</div>
-                        <div class="player-score">🟠 AI: 0</div>
-                    </div>
+                <div class="status-message">🔴 Your Turn - Click a column!</div>
+                <div class="score-display">
+                    <div class="player-score">🔴 You: 0</div>
+                    <div class="player-score">🟠 AI: 0</div>
                 </div>
             """)
 
@@ -701,7 +765,7 @@ with gr.Blocks(title="Connect 4 AI - Beautiful Edition", theme=gr.themes.Soft())
         outputs=[game_state, board_state_json]
     )
 
-    # JavaScript to trigger column buttons
+    # JavaScript to trigger column buttons and initialize on load
     gr.HTML("""
     <script>
     window.playMove = function(col) {
@@ -710,8 +774,33 @@ with gr.Blocks(title="Connect 4 AI - Beautiful Edition", theme=gr.themes.Soft())
             btn.click();
         }
     };
+
+    // Force initialization after a delay to ensure DOM is ready
+    setTimeout(() => {
+        console.log('Forcing game initialization...');
+        if (typeof initializeGame === 'function') {
+            initializeGame();
+        }
+    }, 1500);
     </script>
     """)
+
+    # Trigger initial board state on load
+    demo.load(
+        fn=lambda: json.dumps(get_board_state_json(create_initial_state())),
+        outputs=[board_state_json],
+        js="""
+        () => {
+            console.log('Demo loaded, initializing game...');
+            setTimeout(() => {
+                if (typeof initializeGame === 'function') {
+                    initializeGame();
+                }
+            }, 100);
+            return null;
+        }
+        """
+    )
 
 if __name__ == "__main__":
     demo.launch()
