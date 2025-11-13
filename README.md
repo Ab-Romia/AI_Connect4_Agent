@@ -1,387 +1,181 @@
-# 🎮 Connect 4 Platform - AI miniMAX
-
-An **advanced, beautiful, and intelligent** Connect 4 game platform featuring multiple game modes, adjustable AI difficulty, stunning UI themes, and real-time visualization of AI decision-making.
-
-[![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com)
-
 ---
+title: Connect 4 AI - Minimax Algorithm
+emoji: 🎮
+colorFrom: blue
+colorTo: red
+sdk: gradio
+app_file: app.py
+pinned: false
+license: mit
+---
+
+# 🎮 Connect 4 AI - Powered by Minimax Algorithm
+
+Play Connect 4 against an intelligent AI opponent! This application features a sophisticated AI that uses the minimax algorithm with alpha-beta pruning to make optimal moves.
 
 ## ✨ Features
 
-### 🎯 **Multiple Game Modes**
-- **Human vs AI** - Challenge yourself against an intelligent AI opponent
-- **Human vs Human** - Classic two-player local multiplayer
-- **AI vs AI** - Watch two AI agents battle with real-time visualization
-- **CLI Mode** - Traditional command-line interface for purists
+### 🤖 **Intelligent AI Engine**
+- **Minimax Algorithm** with alpha-beta pruning for optimal gameplay
+- **5 Difficulty Levels**: From Easy (2-ply) to Insane (10-ply)
+- **Smart Position Evaluation** - AI favors center positions and recognizes threats
+- **Move Ordering** - Efficient tree pruning for faster computation
 
-### 🤖 **Advanced AI Engine**
-- **Minimax Algorithm** with alpha-beta pruning for optimal play
-- **5 Difficulty Levels**: Easy, Medium, Hard, Expert, and Insane
-- **Intelligent Position Evaluation** with center-column prioritization
-- **Threat Detection** - AI recognizes and blocks opponent winning moves
-- **Decision Tree Visualization** - Watch the AI think in real-time!
-
-### 🎨 **Beautiful User Interface**
-- **4 Gorgeous Themes**: Classic, Dark, Ocean, and Forest
-- **Smooth Animations** - Satisfying piece drop effects
-- **Hover Previews** - See where your piece will land
-- **Responsive Design** - Clean and intuitive layout
-- **Real-time Statistics** - Track moves, time, and scores
-
-### 📊 **Game Features**
-- **Undo Functionality** - Take back moves to experiment
-- **Move History** - Complete game replay capability
-- **Real-time Scoring** - Connect-4 pattern tracking
-- **Game Statistics** - Time tracking and move counting
-- **Settings Persistence** - Your preferences are saved automatically
+### 🎯 **Game Features**
+- **Interactive Web Interface** - Easy-to-use Gradio interface
+- **Visual Board** - Clear, colorful display of game state
+- **Real-time Scoring** - Tracks Connect-4 patterns for both players
+- **Undo Functionality** - Take back moves to experiment with strategies
+- **Adjustable Difficulty** - Choose your challenge level
 
 ### ⚡ **Technical Highlights**
-- **Efficient Bitboard Representation** - Lightning-fast board operations
-- **Optimized Minimax** - Move ordering for efficient tree pruning
-- **Pure Python** - No external dependencies except Tkinter (included in Python)
-- **Cross-platform** - Runs on Windows, macOS, and Linux
+- **Bitboard Representation** - Efficient board state storage
+- **Alpha-Beta Pruning** - Optimal minimax tree exploration
+- **Pure Python** - Built with Python, Gradio, and Pillow
+- **Fast Computation** - Optimized for responsive gameplay
 
----
+## 🚀 How to Play
 
-## 🚀 Quick Start
-
-### Prerequisites
-- **Python 3.7 or higher**
-- **Tkinter** (usually comes pre-installed with Python)
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/AI_Connect4_miniMAX.git
-   cd AI_Connect4_miniMAX
-   ```
-
-2. **Verify Python installation**
-   ```bash
-   python --version  # Should show Python 3.7+
-   ```
-
-3. **Run the game!**
-   ```bash
-   python Connect4Platform.py
-   ```
-
-That's it! No pip installs, no dependencies to manage. Just pure Python fun! 🎉
-
----
-
-## 🎮 How to Play
-
-### Launching the Game
-```bash
-# Main platform with all features
-python Connect4Platform.py
-
-# Legacy GUI (Human vs AI only)
-python GUI.py
-
-# Command-line interface
-python CLI.py
-```
+1. **Choose Your Difficulty** - Select from Easy to Insane
+2. **Enter Column Number** - Type 1-7 to select which column to drop your piece
+3. **Click "Play Move"** - Make your move and watch the AI respond
+4. **Connect 4 to Win!** - Get 4 pieces in a row (horizontal, vertical, or diagonal)
 
 ### Game Rules
-1. **Objective**: Connect 4 pieces of your color in a row (horizontal, vertical, or diagonal)
-2. **Players**: Take turns dropping pieces into columns
-3. **Gravity**: Pieces fall to the lowest available position
-4. **Win Conditions**: First player to get 4-in-a-row wins!
-5. **Draw**: If the board fills up with no winner, it's a draw
-
-### Controls
-- **Mouse Click**: Drop piece in selected column
-- **Hover**: Preview where your piece will land
-- **Undo Button**: Take back the last move
-- **Restart Button**: Start a new game
-- **Pause Button** (AI vs AI mode): Pause/resume the game
-
----
-
-## 🎨 Themes
-
-### Classic Theme
-- **Board**: Bright blue (#0074D9)
-- **Player 1**: Red (#FF4136)
-- **Player 2**: Yellow (#FFDC00)
-- **Perfect for**: Traditional Connect 4 feel
-
-### Dark Theme
-- **Board**: Dark slate (#2C3E50)
-- **Player 1**: Crimson (#E74C3C)
-- **Player 2**: Orange (#F39C12)
-- **Perfect for**: Night gaming sessions
-
-### Ocean Theme
-- **Board**: Deep sea blue (#006994)
-- **Player 1**: Coral (#FF6B6B)
-- **Player 2**: Teal (#4ECDC4)
-- **Perfect for**: Relaxing, peaceful gameplay
-
-### Forest Theme
-- **Board**: Forest green (#2D5016)
-- **Player 1**: Dark red (#8B0000)
-- **Player 2**: Gold (#FFD700)
-- **Perfect for**: Nature lovers
-
----
+- You play as **Red (Player 1)**
+- AI plays as **Yellow (Player 2)**
+- Players alternate dropping pieces into columns
+- Pieces fall to the lowest available position
+- First to connect 4 pieces wins!
+- If the board fills up, the player with the most Connect-4 patterns wins
 
 ## 🤖 AI Difficulty Levels
 
-| Difficulty | Search Depth | Strength | Best For |
-|------------|--------------|----------|----------|
-| **Easy** | 2 | ⭐ | Beginners learning the game |
-| **Medium** | 4 | ⭐⭐⭐ | Casual players |
-| **Hard** | 6 | ⭐⭐⭐⭐ | Experienced players |
-| **Expert** | 8 | ⭐⭐⭐⭐⭐ | Advanced players seeking challenge |
-| **Insane** | 10 | ⭐⭐⭐⭐⭐⭐ | Ultimate challenge! |
+| Difficulty | Search Depth | Response Time | Skill Level |
+|------------|--------------|---------------|-------------|
+| **Easy** | 2 moves ahead | < 0.1s | ⭐ Beginner-friendly |
+| **Medium** | 4 moves ahead | 0.1-0.5s | ⭐⭐⭐ Balanced |
+| **Hard** | 6 moves ahead | 0.5-2s | ⭐⭐⭐⭐ Challenging |
+| **Expert** | 8 moves ahead | 2-10s | ⭐⭐⭐⭐⭐ Very Strong |
+| **Insane** | 10 moves ahead | 10-60s | ⭐⭐⭐⭐⭐⭐ Near-Optimal |
 
-**Note**: Higher difficulties require more thinking time but play much stronger!
-
----
-
-## 🏗️ Project Structure
-
-```
-AI_Connect4_miniMAX/
-├── Connect4Platform.py    # Main launcher with all features ⭐
-├── GUI.py                 # Legacy GUI (Human vs AI)
-├── CLI.py                 # Command-line interface
-├── Board.py               # Bitboard game logic
-├── MiniMax.py             # AI engine with alpha-beta pruning
-├── config.json            # Auto-generated settings (created on first run)
-├── requirements.txt       # Python dependencies (none!)
-├── .gitignore            # Git ignore rules
-└── README.md             # This file
-```
-
----
+**Note**: Higher difficulties take longer to compute but play much stronger!
 
 ## 🧠 How the AI Works
 
 ### Minimax Algorithm
-The AI uses the **minimax algorithm** with **alpha-beta pruning** to search through possible future game states and choose the optimal move.
+The AI uses the **minimax algorithm**, a decision-making algorithm for turn-based games. It works by:
 
-```python
-def minimax(board, depth, alpha, beta, maximizing_player):
-    """
-    Recursively evaluate game tree:
-    - depth: How many moves to look ahead
-    - alpha/beta: Pruning bounds for optimization
-    - maximizing_player: AI (maximize) or Human (minimize)
-    """
-```
+1. **Exploring Future Moves** - Simulates possible game states several moves ahead
+2. **Evaluating Positions** - Scores each position based on tactical and positional factors
+3. **Choosing Optimal Move** - Selects the move that leads to the best outcome
+4. **Alpha-Beta Pruning** - Skips branches that can't improve the result (optimization)
 
 ### Evaluation Function
 The AI scores positions based on:
 
-1. **Positional Weights** (0-200 points)
-   - Center columns valued highest
-   - Strategic positioning bonus
+- **Tactical Patterns** (most important)
+  - 4-in-a-row: +100,000 points (win!)
+  - 3-in-a-row with empty space: +1,000 points
+  - 2-in-a-row with empty spaces: +100 points
+  - Opponent threats: Negative scores (forces defensive play)
 
-2. **Tactical Patterns**
-   - 4-in-a-row: +100,000 (win!)
-   - 3-in-a-row with empty: +1,000
-   - 2-in-a-row with empty: +100
-   - Opponent 3-in-a-row: -800 (block!)
-
-3. **Threat Detection**
-   - Recognizes imminent threats
-   - Forces defensive moves when necessary
+- **Positional Strategy**
+  - Center columns valued highly (more connection opportunities)
+  - Middle rows preferred (more flexible positioning)
+  - Edge positions less valuable
 
 ### Performance
-- **Depth 4 (Medium)**: ~0.01-0.1 seconds per move
-- **Depth 6 (Hard)**: ~0.1-1 second per move
-- **Depth 8 (Expert)**: ~1-5 seconds per move
-- **Depth 10 (Insane)**: ~5-30 seconds per move
+- **Bitboard Representation**: Uses integer bitmasks for lightning-fast board operations
+- **Move Ordering**: Evaluates promising moves first for better pruning
+- **Efficient Recursion**: Minimal memory overhead with depth-limited search
 
-*Times vary based on board complexity and system performance*
+## 🏗️ Project Structure
 
----
-
-## ⚙️ Configuration
-
-Settings are automatically saved to `config.json` in the game directory:
-
-```json
-{
-  "difficulty": "Medium",
-  "theme": "Classic",
-  "show_tree": true,
-  "animation_speed": 15,
-  "sound_enabled": false,
-  "last_mode": "Human vs AI"
-}
+```
+AI_Connect4_Agent/
+├── app.py                 # Gradio web interface (main entry point)
+├── Board.py               # Bitboard game logic
+├── MiniMax.py             # AI engine with minimax algorithm
+├── requirements.txt       # Python dependencies
+└── README_HF.md          # This file (Hugging Face documentation)
 ```
 
-You can manually edit this file or use the in-game settings menu.
+## 🚀 Local Deployment
 
----
+To run this application locally:
+
+```bash
+# Clone the repository
+git clone <your-repo-url>
+cd AI_Connect4_Agent
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the application
+python app.py
+```
+
+The app will launch at `http://localhost:7860`
 
 ## 🎓 Educational Value
 
-This project is excellent for learning:
-
-- **Game AI**: Minimax algorithm, alpha-beta pruning, heuristic evaluation
-- **Data Structures**: Bitboards for efficient state representation
-- **GUI Programming**: Tkinter for desktop applications
-- **Game Development**: Animation, user interaction, state management
-- **Algorithm Optimization**: Move ordering, pruning strategies
+This project demonstrates:
+- **Game AI**: Minimax algorithm implementation
+- **Algorithm Optimization**: Alpha-beta pruning technique
+- **Data Structures**: Bitboard representation
+- **Web Development**: Gradio interface creation
+- **Python Programming**: Clean, modular code structure
 
 Perfect for:
-- Computer Science students studying AI
+- Computer Science students learning AI
 - Game development enthusiasts
-- Python learners wanting a complete project
 - Interview preparation (game AI is a common topic!)
+- Anyone interested in game algorithms
 
----
+## 🔧 Customization
 
-## 🔧 Advanced Usage
+### Adjust AI Behavior
+Edit `MiniMax.py` to customize:
+- Positional weights (favor different columns)
+- Tactical scoring (change threat priorities)
+- Search depth (balance speed vs strength)
 
-### Running Specific Modes Directly
+### Modify Interface
+Edit `app.py` to customize:
+- Color scheme
+- Board size
+- UI layout
+- Additional features
 
-```bash
-# Play against AI immediately (legacy)
-python GUI.py
+## 📝 Algorithm Complexity
 
-# CLI mode for terminal enthusiasts
-python CLI.py
-
-# Import and use in your own code
-from Board import Connect4Board
-from MiniMax import minimax
-
-board = Connect4Board()
-best_move, score = minimax(board, depth=6, alpha=float('-inf'),
-                           beta=float('inf'), maximizing_player=True)
-```
-
-### Customizing AI Behavior
-
-Edit `MiniMax.py` to adjust:
-- **Positional weights**: Favor different columns
-- **Tactical scoring**: Change threat priorities
-- **Search depth**: Balance speed vs strength
-
-### Creating New Themes
-
-Edit `Connect4Platform.py` and add to the `THEMES` dictionary:
-
-```python
-"MyTheme": {
-    "board": "#HEX_COLOR",
-    "empty": "#HEX_COLOR",
-    "player1": "#HEX_COLOR",
-    "player2": "#HEX_COLOR",
-    "player1_hover": "#HEX_COLOR",
-    "player2_hover": "#HEX_COLOR",
-    "bg": "#HEX_COLOR",
-    "text": "#HEX_COLOR"
-}
-```
-
----
-
-## 🐛 Troubleshooting
-
-### Tkinter Not Found
-**Problem**: `ImportError: No module named 'tkinter'`
-
-**Solution**:
-```bash
-# Ubuntu/Debian
-sudo apt-get install python3-tk
-
-# macOS (should be pre-installed)
-brew install python-tk
-
-# Windows (usually included with Python)
-# Reinstall Python from python.org with "tcl/tk" option checked
-```
-
-### Slow Performance
-**Problem**: AI takes too long to move
-
-**Solution**:
-- Lower the difficulty setting
-- Close other resource-intensive applications
-- The AI is working correctly - higher difficulties need time to think!
-
-### Game Crashes
-**Problem**: Unexpected errors or crashes
-
-**Solution**:
-1. Delete `config.json` to reset settings
-2. Update to Python 3.7+
-3. Check for file permissions
-
----
+- **Time Complexity**: O(b^d) where b ≈ 7 (branching factor) and d = depth
+  - Without pruning: ~7^10 ≈ 282 billion nodes at depth 10
+  - With alpha-beta pruning: Reduces to ~7^5 ≈ 16,800 nodes (typical case)
+- **Space Complexity**: O(d) for recursion stack
+- **Board Operations**: O(1) for most operations thanks to bitboards
 
 ## 🤝 Contributing
 
-Contributions are welcome! Here are some ideas:
+Contributions are welcome! Some ideas:
+- Add opening book for early game
+- Implement iterative deepening
+- Add game statistics and analytics
+- Create tournament mode
+- Add sound effects
 
-- [ ] Add sound effects and music
-- [ ] Implement network multiplayer
-- [ ] Add tournament mode with brackets
-- [ ] Create mobile version
-- [ ] Add replay/save game functionality
-- [ ] Implement opening book for AI
-- [ ] Add achievements and statistics tracking
-
-**How to contribute**:
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
----
-
-## 📝 License
+## 📄 License
 
 This project is open source and available under the MIT License.
 
----
-
 ## 👏 Credits
 
-**Algorithm**: Minimax with alpha-beta pruning (classic game AI)
-**Data Structure**: Bitboard representation for efficient board state
-**Framework**: Python + Tkinter for cross-platform GUI
-**Inspiration**: Classic Connect 4 game by Milton Bradley
-
----
-
-## 🎯 Roadmap
-
-### Version 2.0 (Current)
-- ✅ Multiple game modes
-- ✅ Adjustable difficulty
-- ✅ Multiple themes
-- ✅ AI decision tree visualization
-- ✅ Settings persistence
-
-### Version 3.0 (Planned)
-- ⏳ Sound effects
-- ⏳ Network multiplayer
-- ⏳ Game replay system
-- ⏳ Mobile version
-- ⏳ Achievement system
-
----
-
-## 💖 Acknowledgments
-
-Special thanks to:
-- The Python community for excellent documentation
-- Game AI researchers for minimax algorithm insights
-- All contributors and players who make this project better!
+- **Algorithm**: Minimax with alpha-beta pruning (classic game AI)
+- **Data Structure**: Bitboard representation
+- **Framework**: Gradio for web interface
+- **Inspiration**: Classic Connect 4 by Milton Bradley
 
 ---
 
@@ -389,6 +183,6 @@ Special thanks to:
 
 **Enjoy playing Connect 4! May the best strategist win! 🏆**
 
-Made with ❤️ and Python 🐍
+Made with ❤️ using Python 🐍, Gradio, and AI algorithms
 
 </div>
