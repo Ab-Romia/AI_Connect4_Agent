@@ -590,12 +590,14 @@ with gr.Blocks(title="Connect 4 AI - Beautiful Edition", theme=gr.themes.Soft())
         gr.HTML('<canvas id="game-board-canvas"></canvas>')
 
         # Status panel
-        with gr.Column(elem_class="status-panel"):
+        with gr.Column():
             status_display = gr.HTML(value="""
-                <div class="status-message">🔴 Your Turn - Click a column!</div>
-                <div class="score-display">
-                    <div class="player-score">🔴 You: 0</div>
-                    <div class="player-score">🟠 AI: 0</div>
+                <div class="status-panel">
+                    <div class="status-message">🔴 Your Turn - Click a column!</div>
+                    <div class="score-display">
+                        <div class="player-score">🔴 You: 0</div>
+                        <div class="player-score">🟠 AI: 0</div>
+                    </div>
                 </div>
             """)
 
