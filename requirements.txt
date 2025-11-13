@@ -1,14 +1,12 @@
-# AI Connect 4 miniMAX - Python Dependencies
-# This project uses Python standard library only
-# Minimum Python version: 3.7
+# Connect 4 AI - Requirements for Hugging Face Deployment
+# Python 3.7+
 
-# No external dependencies required!
-# The following are included in Python standard library:
-# - tkinter (GUI framework - usually pre-installed with Python)
-# - time (for timing measurements)
-# - os (for CLI utilities)
+# Core dependencies for web interface
+gradio>=4.0.0
+Pillow>=9.0.0
+numpy>=1.21.0
 
-# Optional development dependencies (uncomment if needed):
+# Optional: Development dependencies (uncomment if needed locally)
 # pytest>=7.0.0  # For running tests
 # black>=22.0.0  # For code formatting
 # flake8>=4.0.0  # For linting
