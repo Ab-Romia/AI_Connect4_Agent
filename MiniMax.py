@@ -211,11 +211,13 @@ def minimax(board, depth, alpha, beta, maximizing_player, level=0, return_tree=F
     if maximizing_player:
         for _, col in move_scores:
             board.move(col, 2)
-            _, eval, child = minimax(board, depth - 1, alpha, beta, False, level + 1, return_tree)
-            board.undo(col, 2)
             if return_tree:
+                _, eval, child = minimax(board, depth - 1, alpha, beta, False, level + 1, return_tree)
                 child.move = col
                 node.children.append(child)
+            else:
+                _, eval = minimax(board, depth - 1, alpha, beta, False, level + 1, return_tree)
+            board.undo(col, 2)
             if eval > best_score:
                 best_score = eval
                 best_col = col
@@ -227,11 +229,13 @@ def minimax(board, depth, alpha, beta, maximizing_player, level=0, return_tree=F
     else:
         for _, col in move_scores:
             board.move(col, 1)
-            _, eval, child = minimax(board, depth - 1, alpha, beta, True, level + 1, return_tree)
-            board.undo(col, 1)
             if return_tree:
+                _, eval, child = minimax(board, depth - 1, alpha, beta, True, level + 1, return_tree)
                 child.move = col
                 node.children.append(child)
+            else:
+                _, eval = minimax(board, depth - 1, alpha, beta, True, level + 1, return_tree)
+            board.undo(col, 1)
             if eval < best_score:
                 best_score = eval
                 best_col = col

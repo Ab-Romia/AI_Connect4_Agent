@@ -1,34 +1,15 @@
 """
 Connect 4 AI - Hugging Face Gradio Interface
 An intelligent Connect 4 game with adjustable AI difficulty
+Fixed version with proper state management
 """
 
 import gradio as gr
-import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 from Board import Connect4Board
 from MiniMax import minimax
 import time
-
-# Game state (using a class to maintain state across function calls)
-class GameState:
-    def __init__(self):
-        self.board = Connect4Board()
-        self.current_player = 1
-        self.game_over = False
-        self.move_history = []
-        self.ai_depth = 4
-        self.message = "Your turn! Click a column to play."
-
-    def reset(self):
-        self.board.reset()
-        self.current_player = 1
-        self.game_over = False
-        self.move_history = []
-        self.message = "Your turn! Click a column to play."
-
-# Global game state
-game = GameState()
+import copy
 
 # Color scheme
 COLORS = {
@@ -41,12 +22,26 @@ COLORS = {
     'border': (0, 0, 0)          # Black border
 }
 
-def create_board_image(board):
+def create_initial_state():
+    """Create initial game state dictionary"""
+    return {
+        'board': Connect4Board(),
+        'current_player': 1,
+        'game_over': False,
+        'move_history': [],
+        'ai_depth': 4,
+        'winner': None,
+        'moves_count': 0
+    }
+
+def create_board_image(board_state):
     """Create a PIL image of the current board state"""
     ROWS, COLS = 6, 7
     CELL_SIZE = 100
     PADDING = 10
     RADIUS = (CELL_SIZE - PADDING * 2) // 2
+
+    board = board_state['board']
 
     width = COLS * CELL_SIZE
     height = (ROWS + 1) * CELL_SIZE
@@ -79,314 +74,373 @@ def create_board_image(board):
             y0 = center_y - RADIUS
             x1 = center_x + RADIUS
             y1 = center_y + RADIUS
-            draw.ellipse([x0, y0, x1, y1], fill=color, outline=COLORS['border'], width=2)
+            draw.ellipse([x0, y0, x1, y1], fill=color, outline=COLORS['board'], width=3)
 
-    # Draw column indicators at top
+    # Draw column numbers at top
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
+    except:
+        font = ImageFont.load_default()
+
     for col in range(COLS):
         center_x = col * CELL_SIZE + CELL_SIZE // 2
         center_y = CELL_SIZE // 2
-        draw.text((center_x - 10, center_y - 15), str(col + 1), fill=COLORS['text'])
+        text = str(col + 1)
+        # Get text bounding box for centering
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        draw.text((center_x - text_width//2, center_y - text_height//2),
+                 text, fill=COLORS['text'], font=font)
 
     return img
 
-def get_game_status():
+def get_game_status(state):
     """Get current game status message"""
-    if game.game_over:
-        p1_score = game.board.connect_4s(1)
-        p2_score = game.board.connect_4s(2)
+    if state['game_over']:
+        p1_score = state['board'].connect_4s(1)
+        p2_score = state['board'].connect_4s(2)
         if p1_score > p2_score:
             return "🎉 You win! Congratulations!"
         elif p2_score > p1_score:
             return "🤖 AI wins! Better luck next time!"
         else:
             return "🤝 It's a draw!"
-    elif game.current_player == 1:
-        return "🔴 Your turn! Click a column (1-7) to play."
+    elif state['current_player'] == 1:
+        return "🔴 Your turn! Click a column number to play."
     else:
         return "🟡 AI is thinking..."
 
-def get_score_display():
+def get_score_display(state):
     """Get score display"""
-    p1_score = game.board.connect_4s(1)
-    p2_score = game.board.connect_4s(2)
+    p1_score = state['board'].connect_4s(1)
+    p2_score = state['board'].connect_4s(2)
 
-    p1_indicator = " 🏆" if p1_score > p2_score and game.game_over else ""
-    p2_indicator = " 🏆" if p2_score > p1_score and game.game_over else ""
+    p1_indicator = " 🏆" if p1_score > p2_score and state['game_over'] else ""
+    p2_indicator = " 🏆" if p2_score > p1_score and state['game_over'] else ""
 
     return f"You (Red): {p1_score}{p1_indicator} | AI (Yellow): {p2_score}{p2_indicator}"
 
-def make_ai_move():
-    """Make AI move"""
-    if game.game_over:
-        return
-
-    valid_moves = game.board.valid_moves()
-    if not valid_moves:
-        game.game_over = True
-        return
-
-    # AI makes a move (Player 2)
-    start_time = time.time()
-    best_col, _, _ = minimax(
-        game.board,
-        depth=game.ai_depth,
-        alpha=float('-inf'),
-        beta=float('inf'),
-        maximizing_player=True,
-        return_tree=False
-    )
-    time_taken = time.time() - start_time
-
-    if best_col is not None:
-        game.board.move(best_col, 2)
-        game.move_history.append((best_col, 2))
-
-        # Check if game is over
-        if not game.board.valid_moves():
-            game.game_over = True
+def check_game_over(state):
+    """Check if game is over and update state"""
+    if not state['board'].valid_moves():
+        state['game_over'] = True
+        p1_score = state['board'].connect_4s(1)
+        p2_score = state['board'].connect_4s(2)
+        if p1_score > p2_score:
+            state['winner'] = 'player1'
+        elif p2_score > p1_score:
+            state['winner'] = 'player2'
         else:
-            game.current_player = 1
+            state['winner'] = 'draw'
+        return True
+    return False
 
-def play_move(column):
-    """Handle a player's move"""
+def make_ai_move(state):
+    """Make AI move and update state"""
+    if state['game_over'] or state['current_player'] != 2:
+        return state
+
+    valid_moves = state['board'].valid_moves()
+    if not valid_moves:
+        state['game_over'] = True
+        return state
+
     try:
-        col_idx = int(column) - 1  # Convert to 0-indexed
+        # AI makes a move (Player 2)
+        best_col, _ = minimax(
+            state['board'],
+            depth=state['ai_depth'],
+            alpha=float('-inf'),
+            beta=float('inf'),
+            maximizing_player=True,
+            return_tree=False
+        )
 
-        if game.game_over:
+        if best_col is not None and best_col in valid_moves:
+            state['board'].move(best_col, 2)
+            state['move_history'].append((best_col, 2))
+            state['moves_count'] += 1
+
+            # Check if game is over
+            if not check_game_over(state):
+                state['current_player'] = 1
+    except Exception as e:
+        print(f"AI Error: {e}")
+        # If AI fails, make a random valid move
+        import random
+        col = random.choice(valid_moves)
+        state['board'].move(col, 2)
+        state['move_history'].append((col, 2))
+        state['moves_count'] += 1
+        if not check_game_over(state):
+            state['current_player'] = 1
+
+    return state
+
+def play_column(col_num, state, difficulty):
+    """Handle a player's move in a specific column"""
+    # Create a deep copy of state to avoid mutations
+    state = copy.deepcopy(state)
+
+    try:
+        col_idx = col_num - 1  # Convert to 0-indexed (col_num is already 0-6 from buttons)
+
+        if state['game_over']:
             return (
-                create_board_image(game.board),
-                get_game_status(),
-                get_score_display(),
+                state,
+                create_board_image(state),
+                get_game_status(state),
+                get_score_display(state),
                 "Game is over! Click 'New Game' to play again."
             )
 
-        if game.current_player != 1:
+        if state['current_player'] != 1:
             return (
-                create_board_image(game.board),
-                get_game_status(),
-                get_score_display(),
+                state,
+                create_board_image(state),
+                get_game_status(state),
+                get_score_display(state),
                 "Please wait for AI to finish its move."
             )
 
-        if col_idx not in game.board.valid_moves():
+        valid_moves = state['board'].valid_moves()
+        if col_idx not in valid_moves:
             return (
-                create_board_image(game.board),
-                get_game_status(),
-                get_score_display(),
-                f"Column {column} is full or invalid! Try another column."
+                state,
+                create_board_image(state),
+                get_game_status(state),
+                get_score_display(state),
+                f"❌ Column {col_num} is full! Try another column."
             )
 
         # Player makes a move
-        game.board.move(col_idx, 1)
-        game.move_history.append((col_idx, 1))
+        state['board'].move(col_idx, 1)
+        state['move_history'].append((col_idx, 1))
+        state['moves_count'] += 1
 
         # Check if game is over after player move
-        if not game.board.valid_moves():
-            game.game_over = True
+        if check_game_over(state):
             return (
-                create_board_image(game.board),
-                get_game_status(),
-                get_score_display(),
-                "Move successful!"
+                state,
+                create_board_image(state),
+                get_game_status(state),
+                get_score_display(state),
+                "✓ Move successful! Game Over!"
             )
 
         # Switch to AI
-        game.current_player = 2
+        state['current_player'] = 2
 
         # AI makes its move
-        make_ai_move()
+        state = make_ai_move(state)
 
         return (
-            create_board_image(game.board),
-            get_game_status(),
-            get_score_display(),
-            f"You played column {column}. AI responded!"
+            state,
+            create_board_image(state),
+            get_game_status(state),
+            get_score_display(state),
+            f"✓ You played column {col_num}. AI responded!"
         )
 
-    except ValueError:
-        return (
-            create_board_image(game.board),
-            get_game_status(),
-            get_score_display(),
-            "Please enter a valid column number (1-7)."
-        )
     except Exception as e:
         return (
-            create_board_image(game.board),
-            get_game_status(),
-            get_score_display(),
-            f"Error: {str(e)}"
+            state,
+            create_board_image(state),
+            get_game_status(state),
+            get_score_display(state),
+            f"❌ Error: {str(e)}"
         )
 
-def reset_game(difficulty):
+def reset_game(difficulty, state):
     """Reset the game with selected difficulty"""
-    game.reset()
+    # Create completely new state
+    state = create_initial_state()
 
     # Set AI depth based on difficulty
     difficulty_map = {
-        "Easy (2 moves ahead)": 2,
-        "Medium (4 moves ahead)": 4,
-        "Hard (6 moves ahead)": 6,
-        "Expert (8 moves ahead)": 8,
-        "Insane (10 moves ahead)": 10
+        "Easy (2 moves)": 2,
+        "Medium (4 moves)": 4,
+        "Hard (6 moves)": 6,
+        "Expert (8 moves)": 8,
     }
-    game.ai_depth = difficulty_map.get(difficulty, 4)
+    state['ai_depth'] = difficulty_map.get(difficulty, 4)
 
     return (
-        create_board_image(game.board),
-        get_game_status(),
-        get_score_display(),
-        f"New game started with {difficulty} difficulty!"
+        state,
+        create_board_image(state),
+        get_game_status(state),
+        get_score_display(state),
+        f"✓ New game started with {difficulty}!"
     )
 
-def undo_move():
+def undo_move(state):
     """Undo the last move (both AI and player)"""
-    if len(game.move_history) < 2 or game.game_over:
+    state = copy.deepcopy(state)
+
+    if len(state['move_history']) < 2:
         return (
-            create_board_image(game.board),
-            get_game_status(),
-            get_score_display(),
-            "Cannot undo - not enough moves or game is over."
+            state,
+            create_board_image(state),
+            get_game_status(state),
+            get_score_display(state),
+            "❌ Cannot undo - not enough moves made."
         )
 
+    if state['game_over']:
+        state['game_over'] = False
+        state['winner'] = None
+
     try:
-        # Undo AI move
-        last_col, last_player = game.move_history.pop()
-        game.board.undo(last_col, last_player)
+        # Undo AI move (if exists)
+        if len(state['move_history']) >= 1:
+            last_col, last_player = state['move_history'].pop()
+            state['board'].undo(last_col, last_player)
+            state['moves_count'] -= 1
 
         # Undo player move
-        last_col, last_player = game.move_history.pop()
-        game.board.undo(last_col, last_player)
+        if len(state['move_history']) >= 1:
+            last_col, last_player = state['move_history'].pop()
+            state['board'].undo(last_col, last_player)
+            state['moves_count'] -= 1
 
-        game.current_player = 1
-        game.game_over = False
+        state['current_player'] = 1
+        state['game_over'] = False
 
         return (
-            create_board_image(game.board),
-            get_game_status(),
-            get_score_display(),
-            "Last move undone!"
+            state,
+            create_board_image(state),
+            get_game_status(state),
+            get_score_display(state),
+            "✓ Last moves undone!"
         )
     except Exception as e:
         return (
-            create_board_image(game.board),
-            get_game_status(),
-            get_score_display(),
-            f"Error undoing move: {str(e)}"
+            state,
+            create_board_image(state),
+            get_game_status(state),
+            get_score_display(state),
+            f"❌ Error undoing move: {str(e)}"
         )
 
 # Create Gradio interface
-with gr.Blocks(title="Connect 4 AI - Play Against Intelligent AI", theme=gr.themes.Soft()) as demo:
+with gr.Blocks(title="Connect 4 AI", theme=gr.themes.Soft()) as demo:
+
+    # Game state (persisted across interactions)
+    game_state = gr.State(create_initial_state())
+
     gr.Markdown(
         """
         # 🎮 Connect 4 AI - Powered by Minimax Algorithm
 
-        Play against an intelligent AI opponent! The AI uses the minimax algorithm with alpha-beta pruning
-        to make optimal moves. Adjust the difficulty to control how many moves ahead the AI thinks.
-
-        **How to Play:**
-        - You are Red (Player 1), AI is Yellow (Player 2)
-        - Enter a column number (1-7) and click "Play Move" to drop your piece
-        - Connect 4 pieces horizontally, vertically, or diagonally to win!
-        - The game ends when the board is full - highest score wins!
+        Play against an intelligent AI! Connect 4 pieces horizontally, vertically, or diagonally to win.
+        **You are Red**, **AI is Yellow**. Click a column number (1-7) to drop your piece!
         """
     )
 
     with gr.Row():
         with gr.Column(scale=2):
+            # Board display
             board_display = gr.Image(
-                value=create_board_image(game.board),
+                value=create_board_image(create_initial_state()),
                 label="Game Board",
-                type="pil"
-            )
-            status_text = gr.Textbox(
-                value=get_game_status(),
-                label="Game Status",
-                interactive=False
-            )
-            score_text = gr.Textbox(
-                value=get_score_display(),
-                label="Score",
+                type="pil",
                 interactive=False
             )
 
-        with gr.Column(scale=1):
-            gr.Markdown("### 🎯 Controls")
-
-            difficulty = gr.Radio(
-                choices=[
-                    "Easy (2 moves ahead)",
-                    "Medium (4 moves ahead)",
-                    "Hard (6 moves ahead)",
-                    "Expert (8 moves ahead)",
-                    "Insane (10 moves ahead)"
-                ],
-                value="Medium (4 moves ahead)",
-                label="AI Difficulty",
-                info="Higher difficulty = stronger AI (but slower)"
-            )
-
-            column_input = gr.Textbox(
-                label="Column to Play",
-                placeholder="Enter 1-7",
-                value="4"
-            )
-
-            play_button = gr.Button("🎯 Play Move", variant="primary", size="lg")
-
+            # Column buttons
             with gr.Row():
-                reset_button = gr.Button("🔄 New Game", variant="secondary")
-                undo_button = gr.Button("⬅️ Undo", variant="secondary")
+                col_buttons = []
+                for i in range(1, 8):
+                    btn = gr.Button(str(i), size="lg", variant="primary")
+                    col_buttons.append(btn)
+
+            status_text = gr.Textbox(
+                value=get_game_status(create_initial_state()),
+                label="Game Status",
+                interactive=False,
+                lines=1
+            )
+
+            score_text = gr.Textbox(
+                value=get_score_display(create_initial_state()),
+                label="Score",
+                interactive=False,
+                lines=1
+            )
 
             message_box = gr.Textbox(
                 label="Message",
-                value="Ready to play!",
-                interactive=False
+                value="Ready to play! Click a column number to start.",
+                interactive=False,
+                lines=2
             )
+
+        with gr.Column(scale=1):
+            gr.Markdown("### ⚙️ Game Controls")
+
+            difficulty = gr.Radio(
+                choices=[
+                    "Easy (2 moves)",
+                    "Medium (4 moves)",
+                    "Hard (6 moves)",
+                    "Expert (8 moves)",
+                ],
+                value="Medium (4 moves)",
+                label="AI Difficulty",
+                info="Higher = Stronger AI (slower)"
+            )
+
+            with gr.Row():
+                reset_button = gr.Button("🔄 New Game", variant="secondary", size="lg")
+                undo_button = gr.Button("⬅️ Undo", variant="secondary", size="lg")
 
             gr.Markdown(
                 """
-                ### 📊 Game Info
+                ### 📖 How to Play
 
-                **Difficulty Levels:**
+                1. Click a column number (1-7)
+                2. Your piece falls to the lowest spot
+                3. Connect 4 to win!
+                4. AI responds automatically
+
+                ### 🎯 Difficulty Levels
                 - **Easy**: Thinks 2 moves ahead
-                - **Medium**: Thinks 4 moves ahead (balanced)
+                - **Medium**: Thinks 4 moves ahead ⭐
                 - **Hard**: Thinks 6 moves ahead
-                - **Expert**: Thinks 8 moves ahead (challenging)
-                - **Insane**: Thinks 10 moves ahead (very slow but optimal)
+                - **Expert**: Thinks 8 moves ahead (slow)
 
-                **Scoring:** The game counts all Connect-4 patterns on the board.
-                Vertical connections are worth more points!
-
-                ---
-                Made with ❤️ using Python, Gradio, and Minimax AI
+                ### 📊 Scoring
+                Game counts all Connect-4 patterns.
+                Most patterns wins if board fills up!
                 """
             )
 
-    # Event handlers
-    play_button.click(
-        fn=play_move,
-        inputs=[column_input],
-        outputs=[board_display, status_text, score_text, message_box]
-    )
+    # Connect column button events
+    def create_column_handler(column_number):
+        """Create a handler function for a specific column"""
+        def handler(state, diff):
+            return play_column(column_number, state, diff)
+        return handler
 
+    for i, btn in enumerate(col_buttons):
+        btn.click(
+            fn=create_column_handler(i+1),
+            inputs=[game_state, difficulty],
+            outputs=[game_state, board_display, status_text, score_text, message_box]
+        )
+
+    # Connect control button events
     reset_button.click(
         fn=reset_game,
-        inputs=[difficulty],
-        outputs=[board_display, status_text, score_text, message_box]
+        inputs=[difficulty, game_state],
+        outputs=[game_state, board_display, status_text, score_text, message_box]
     )
 
     undo_button.click(
         fn=undo_move,
-        inputs=[],
-        outputs=[board_display, status_text, score_text, message_box]
-    )
-
-    # Allow Enter key to play move
-    column_input.submit(
-        fn=play_move,
-        inputs=[column_input],
-        outputs=[board_display, status_text, score_text, message_box]
+        inputs=[game_state],
+        outputs=[game_state, board_display, status_text, score_text, message_box]
     )
 
 # Launch the app
