@@ -1,21 +1,28 @@
 """
 Connect 4 AI - Beautiful Interactive Gradio Interface
-An intelligent Connect 4 game with stunning animations and intuitive gameplay
+An intelligent Connect 4 game with stunning visuals and intuitive gameplay
+Redesigned for reliability on Hugging Face Spaces
 """
 
 import gradio as gr
+from PIL import Image, ImageDraw, ImageFont
 from Board import Connect4Board
 from MiniMax import minimax
-import json
 import copy
 
-# Color scheme
+# Modern color scheme
 COLORS = {
-    'player1': '#FF4757',  # Vibrant Red
-    'player2': '#FFA502',  # Vibrant Orange/Yellow
-    'empty': '#2C3E50',    # Dark blue-gray
-    'board': '#34495E',    # Slightly lighter blue-gray
-    'win': '#00D2FF'       # Cyan for winning pieces
+    'bg': (103, 126, 234),           # Purple gradient start
+    'bg_end': (118, 75, 162),        # Purple gradient end
+    'board': (30, 60, 114),          # Deep blue board
+    'board_dark': (23, 42, 81),      # Darker blue for depth
+    'empty': (44, 62, 80),           # Dark empty slots
+    'player1': (255, 71, 87),        # Vibrant red
+    'player2': (255, 165, 2),        # Vibrant orange
+    'hover': (255, 255, 255, 80),    # Semi-transparent white
+    'text': (255, 255, 255),         # White text
+    'win': (0, 210, 255),            # Cyan for wins
+    'glow': (255, 255, 255, 40)      # Subtle glow
 }
 
 def create_initial_state():
@@ -27,50 +34,191 @@ def create_initial_state():
         'move_history': [],
         'ai_depth': 4,
         'winner': None,
-        'winning_cells': []
+        'hover_col': None
     }
 
-def get_board_state_json(state):
-    """Convert board state to JSON for JavaScript"""
-    board_array = []
-    for row in range(6):
-        row_data = []
-        for col in range(7):
+def create_beautiful_board(state, hover_col=None):
+    """Create a beautiful PIL image of the board with modern design"""
+    ROWS, COLS = 6, 7
+    CELL_SIZE = 100
+    PADDING = 15
+    BOARD_PADDING = 30
+    RADIUS = (CELL_SIZE - PADDING * 2) // 2
+
+    # Calculate dimensions
+    width = COLS * CELL_SIZE + BOARD_PADDING * 2
+    height = ROWS * CELL_SIZE + BOARD_PADDING * 2 + 80  # Extra space for column indicators
+
+    # Create image with gradient background
+    img = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    # Draw gradient background
+    for y in range(height):
+        ratio = y / height
+        r = int(COLORS['bg'][0] + (COLORS['bg_end'][0] - COLORS['bg'][0]) * ratio)
+        g = int(COLORS['bg'][1] + (COLORS['bg_end'][1] - COLORS['bg'][1]) * ratio)
+        b = int(COLORS['bg'][2] + (COLORS['bg_end'][2] - COLORS['bg'][2]) * ratio)
+        draw.line([(0, y), (width, y)], fill=(r, g, b))
+
+    # Load font
+    try:
+        title_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 32)
+        col_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
+    except:
+        title_font = ImageFont.load_default()
+        col_font = ImageFont.load_default()
+
+    # Draw title
+    title = "🎮 Connect 4 AI"
+    title_bbox = draw.textbbox((0, 0), title, font=title_font)
+    title_width = title_bbox[2] - title_bbox[0]
+    draw.text(((width - title_width) // 2, 10), title, fill=COLORS['text'], font=title_font)
+
+    # Board top position
+    board_top = 80
+
+    # Draw board shadow (for depth)
+    shadow_offset = 8
+    draw.rounded_rectangle(
+        [BOARD_PADDING + shadow_offset, board_top + shadow_offset,
+         width - BOARD_PADDING + shadow_offset, height - BOARD_PADDING + shadow_offset],
+        radius=25,
+        fill=(0, 0, 0, 60)
+    )
+
+    # Draw board background
+    draw.rounded_rectangle(
+        [BOARD_PADDING, board_top, width - BOARD_PADDING, height - BOARD_PADDING],
+        radius=25,
+        fill=COLORS['board']
+    )
+
+    # Draw column hover indicator
+    if hover_col is not None and 0 <= hover_col < COLS and not state['game_over']:
+        col_x = BOARD_PADDING + hover_col * CELL_SIZE
+        draw.rectangle(
+            [col_x, board_top, col_x + CELL_SIZE, height - BOARD_PADDING],
+            fill=COLORS['hover']
+        )
+
+        # Draw arrow indicator above column
+        arrow_x = col_x + CELL_SIZE // 2
+        arrow_y = board_top - 15
+        arrow_size = 12
+        draw.polygon(
+            [(arrow_x, arrow_y),
+             (arrow_x - arrow_size, arrow_y - arrow_size),
+             (arrow_x + arrow_size, arrow_y - arrow_size)],
+            fill=COLORS['player1'] if state['current_player'] == 1 else COLORS['player2']
+        )
+
+    # Draw grid and pieces
+    board = state['board']
+    for row in range(ROWS):
+        for col in range(COLS):
+            center_x = BOARD_PADDING + col * CELL_SIZE + CELL_SIZE // 2
+            center_y = board_top + (ROWS - 1 - row) * CELL_SIZE + CELL_SIZE // 2
+
+            # Check piece state from bitboard
             bit_position = 1 << (row * 7 + col)
-            if state['board'].player1 & bit_position:
-                row_data.append(1)
-            elif state['board'].player2 & bit_position:
-                row_data.append(2)
+
+            # Determine piece color
+            if board.player1 & bit_position:
+                piece_color = COLORS['player1']
+                has_piece = True
+            elif board.player2 & bit_position:
+                piece_color = COLORS['player2']
+                has_piece = True
             else:
-                row_data.append(0)
-        board_array.append(row_data)
+                piece_color = COLORS['empty']
+                has_piece = False
 
-    return {
-        'board': board_array,
-        'currentPlayer': state['current_player'],
-        'gameOver': state['game_over'],
-        'winner': state['winner'],
-        'winningCells': state['winning_cells'],
-        'player1Score': state['board'].connect_4s(1),
-        'player2Score': state['board'].connect_4s(2)
-    }
+            # Draw piece with gradient effect
+            if has_piece:
+                # Outer glow
+                for r in range(RADIUS + 8, RADIUS - 2, -2):
+                    alpha = int(20 * (1 - (RADIUS + 8 - r) / 10))
+                    glow_color = piece_color + (alpha,)
+                    draw.ellipse(
+                        [center_x - r, center_y - r, center_x + r, center_y + r],
+                        fill=glow_color
+                    )
 
-def check_winner(state):
-    """Check for winner and get winning cells"""
-    # Simple check - if one player has more connect-4s and board is full or no valid moves
+                # Main piece
+                draw.ellipse(
+                    [center_x - RADIUS, center_y - RADIUS,
+                     center_x + RADIUS, center_y + RADIUS],
+                    fill=piece_color
+                )
+
+                # Highlight for 3D effect
+                highlight_offset = RADIUS // 3
+                highlight_radius = RADIUS // 2
+                draw.ellipse(
+                    [center_x - highlight_offset - highlight_radius,
+                     center_y - highlight_offset - highlight_radius,
+                     center_x - highlight_offset + highlight_radius,
+                     center_y - highlight_offset + highlight_radius],
+                    fill=COLORS['glow']
+                )
+            else:
+                # Empty slot - create hole effect
+                draw.ellipse(
+                    [center_x - RADIUS, center_y - RADIUS,
+                     center_x + RADIUS, center_y + RADIUS],
+                    fill=COLORS['empty'],
+                    outline=COLORS['board_dark'],
+                    width=3
+                )
+
+    return img
+
+def get_game_status(state):
+    """Get current game status message with emoji"""
+    if state['game_over']:
+        p1_score = state['board'].connect_4s(1)
+        p2_score = state['board'].connect_4s(2)
+        if p1_score > p2_score:
+            return "🎉 **You Win!** Congratulations!"
+        elif p2_score > p1_score:
+            return "🤖 **AI Wins!** Better luck next time!"
+        else:
+            return "🤝 **It's a Draw!**"
+    elif state['current_player'] == 1:
+        return "🔴 **Your Turn** - Click on a column above!"
+    else:
+        return "🟡 **AI is thinking...**"
+
+def get_score_display(state):
+    """Get score display with formatting"""
     p1_score = state['board'].connect_4s(1)
     p2_score = state['board'].connect_4s(2)
 
+    if state['game_over']:
+        if p1_score > p2_score:
+            return f"### 🏆 You: **{p1_score}** | AI: {p2_score}"
+        elif p2_score > p1_score:
+            return f"### You: {p1_score} | AI: **{p2_score}** 🏆"
+        else:
+            return f"### You: {p1_score} | AI: {p2_score}"
+    else:
+        return f"### You: {p1_score} | AI: {p2_score}"
+
+def check_game_over(state):
+    """Check if game is over and update state"""
     if not state['board'].valid_moves():
         state['game_over'] = True
+        p1_score = state['board'].connect_4s(1)
+        p2_score = state['board'].connect_4s(2)
         if p1_score > p2_score:
-            state['winner'] = 1
+            state['winner'] = 'player1'
         elif p2_score > p1_score:
-            state['winner'] = 2
+            state['winner'] = 'player2'
         else:
-            state['winner'] = 0  # Draw
-
-    return state
+            state['winner'] = 'draw'
+        return True
+    return False
 
 def make_ai_move(state):
     """Make AI move and update state"""
@@ -95,7 +243,7 @@ def make_ai_move(state):
         if best_col is not None and best_col in valid_moves:
             state['board'].move(best_col, 2)
             state['move_history'].append((best_col, 2))
-            check_winner(state)
+            check_game_over(state)
             if not state['game_over']:
                 state['current_player'] = 1
     except Exception as e:
@@ -104,45 +252,74 @@ def make_ai_move(state):
         col = random.choice(valid_moves)
         state['board'].move(col, 2)
         state['move_history'].append((col, 2))
-        check_winner(state)
+        check_game_over(state)
         if not state['game_over']:
             state['current_player'] = 1
 
     return state
 
-def play_move(col_idx, state, difficulty):
-    """Handle a player's move"""
+def handle_click(state, difficulty, evt: gr.SelectData):
+    """Handle click on board image"""
     state = copy.deepcopy(state)
 
-    try:
-        if state['game_over']:
-            return state, json.dumps(get_board_state_json(state))
+    if state['game_over'] or state['current_player'] != 1:
+        return (
+            state,
+            create_beautiful_board(state),
+            get_game_status(state),
+            get_score_display(state)
+        )
 
-        if state['current_player'] != 1:
-            return state, json.dumps(get_board_state_json(state))
+    # Calculate which column was clicked
+    # Image width = 7 * 100 + 30 * 2 = 760
+    # Board starts at x=30
+    BOARD_PADDING = 30
+    CELL_SIZE = 100
 
-        valid_moves = state['board'].valid_moves()
-        if col_idx not in valid_moves:
-            return state, json.dumps(get_board_state_json(state))
+    click_x = evt.index[0]
 
-        # Player move
-        state['board'].move(col_idx, 1)
-        state['move_history'].append((col_idx, 1))
-        check_winner(state)
+    # Adjust for board padding
+    board_x = click_x - BOARD_PADDING
 
-        if not state['game_over']:
-            state['current_player'] = 2
-            # AI move
-            state = make_ai_move(state)
+    if board_x < 0 or board_x >= 7 * CELL_SIZE:
+        return (
+            state,
+            create_beautiful_board(state),
+            get_game_status(state),
+            get_score_display(state)
+        )
 
-        return state, json.dumps(get_board_state_json(state))
+    col = int(board_x // CELL_SIZE)
 
-    except Exception as e:
-        print(f"Error: {e}")
-        return state, json.dumps(get_board_state_json(state))
+    # Validate move
+    valid_moves = state['board'].valid_moves()
+    if col not in valid_moves:
+        return (
+            state,
+            create_beautiful_board(state),
+            get_game_status(state),
+            get_score_display(state)
+        )
+
+    # Make player move
+    state['board'].move(col, 1)
+    state['move_history'].append((col, 1))
+    check_game_over(state)
+
+    if not state['game_over']:
+        state['current_player'] = 2
+        # Make AI move
+        state = make_ai_move(state)
+
+    return (
+        state,
+        create_beautiful_board(state),
+        get_game_status(state),
+        get_score_display(state)
+    )
 
 def reset_game(difficulty, state):
-    """Reset the game"""
+    """Reset the game with selected difficulty"""
     state = create_initial_state()
 
     difficulty_map = {
@@ -153,653 +330,190 @@ def reset_game(difficulty, state):
     }
     state['ai_depth'] = difficulty_map.get(difficulty, 4)
 
-    return state, json.dumps(get_board_state_json(state))
+    return (
+        state,
+        create_beautiful_board(state),
+        get_game_status(state),
+        get_score_display(state)
+    )
 
 # Custom CSS for beautiful styling
 custom_css = """
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
 
-    * {
-        font-family: 'Poppins', sans-serif;
-    }
-
-    .gradio-container {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        min-height: 100vh;
-    }
-
-    #game-container {
-        max-width: 900px;
-        margin: 0 auto;
-        padding: 20px;
-    }
-
-    #game-board-canvas {
-        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%) !important;
-        border-radius: 20px !important;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3) !important;
-        cursor: pointer !important;
-        display: block !important;
-        margin: 0 auto !important;
-        transition: transform 0.3s ease;
-        max-width: 100% !important;
-        height: auto !important;
-    }
-
-    #game-board-canvas:hover {
-        transform: translateY(-5px);
-    }
-
-    .game-header {
-        text-align: center;
-        color: white;
-        margin-bottom: 30px;
-        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-    }
-
-    .game-header h1 {
-        font-size: 3em;
-        font-weight: 700;
-        margin: 0;
-        background: linear-gradient(45deg, #fff, #a8edea);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-    }
-
-    .status-panel {
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(10px);
-        border-radius: 15px;
-        padding: 20px;
-        margin: 20px 0;
-        color: white;
-        text-align: center;
-        border: 2px solid rgba(255, 255, 255, 0.2);
-    }
-
-    .score-display {
-        display: flex;
-        justify-content: space-around;
-        margin: 20px 0;
-        font-size: 1.2em;
-        font-weight: 600;
-    }
-
-    .player-score {
-        padding: 15px 30px;
-        background: rgba(255, 255, 255, 0.15);
-        border-radius: 10px;
-        backdrop-filter: blur(5px);
-    }
-
-    .status-message {
-        font-size: 1.5em;
-        font-weight: 600;
-        margin: 10px 0;
-        animation: pulse 2s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.7; }
-    }
-
-    .controls {
-        text-align: center;
-        margin: 20px 0;
-    }
-
-    .control-btn {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        padding: 15px 30px;
-        border-radius: 50px;
-        font-size: 1.1em;
-        font-weight: 600;
-        cursor: pointer;
-        margin: 5px;
-        transition: all 0.3s ease;
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-    }
-
-    .control-btn:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
-    }
-
-    #particle-container {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: 9999;
-    }
-</style>
-"""
-
-# Custom JavaScript for interactive gameplay
-custom_js = """
-<script>
-class Connect4Game {
-    constructor() {
-        this.canvas = document.getElementById('game-board-canvas');
-        if (!this.canvas) {
-            console.error('Canvas element not found!');
-            throw new Error('Canvas element not found');
-        }
-
-        this.ctx = this.canvas.getContext('2d');
-        if (!this.ctx) {
-            console.error('Could not get 2D context!');
-            throw new Error('Could not get 2D context');
-        }
-
-        this.rows = 6;
-        this.cols = 7;
-        this.cellSize = 80;
-        this.padding = 10;
-        this.radius = (this.cellSize - this.padding * 2) / 2;
-
-        // Set canvas dimensions
-        this.canvas.width = this.cols * this.cellSize;
-        this.canvas.height = (this.rows + 1) * this.cellSize;
-
-        this.boardState = null;
-        this.hoverCol = -1;
-        this.animatingPiece = null;
-        this.particles = [];
-
-        this.colors = {
-            player1: '#FF4757',
-            player2: '#FFA502',
-            empty: '#2C3E50',
-            board: '#34495E',
-            hover1: 'rgba(255, 71, 87, 0.5)',
-            hover2: 'rgba(255, 165, 2, 0.5)',
-            win: '#00D2FF'
-        };
-
-        this.setupEventListeners();
-        this.animate();
-
-        console.log('Connect4Game initialized with canvas', this.canvas.width, 'x', this.canvas.height);
-    }
-
-    setupEventListeners() {
-        this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
-        this.canvas.addEventListener('mouseleave', () => this.handleMouseLeave());
-        this.canvas.addEventListener('click', (e) => this.handleClick(e));
-    }
-
-    handleMouseMove(e) {
-        const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const col = Math.floor(x / this.cellSize);
-
-        if (col >= 0 && col < this.cols) {
-            this.hoverCol = col;
-        } else {
-            this.hoverCol = -1;
-        }
-    }
-
-    handleMouseLeave() {
-        this.hoverCol = -1;
-    }
-
-    handleClick(e) {
-        if (!this.boardState || this.boardState.gameOver || this.animatingPiece) return;
-        if (this.boardState.currentPlayer !== 1) return;
-
-        const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const col = Math.floor(x / this.cellSize);
-
-        if (col >= 0 && col < this.cols) {
-            // Find the row where piece will land
-            let targetRow = -1;
-            for (let row = this.rows - 1; row >= 0; row--) {
-                if (this.boardState.board[row][col] === 0) {
-                    targetRow = row;
-                    break;
-                }
-            }
-
-            if (targetRow !== -1) {
-                this.startAnimation(col, targetRow, 1);
-                // Call Python backend
-                window.playMove(col);
-            }
-        }
-    }
-
-    startAnimation(col, targetRow, player) {
-        this.animatingPiece = {
-            col: col,
-            currentY: 0,
-            targetY: (this.rows - targetRow) * this.cellSize + this.cellSize / 2,
-            player: player,
-            velocity: 0,
-            gravity: 0.8
-        };
-    }
-
-    updateBoard(stateJson) {
-        const newState = JSON.parse(stateJson);
-        const oldState = this.boardState;
-        this.boardState = newState;
-
-        // Check if AI made a move and animate it
-        if (oldState && !oldState.gameOver && newState.currentPlayer === 1) {
-            // Find the AI's move
-            for (let row = 0; row < this.rows; row++) {
-                for (let col = 0; col < this.cols; col++) {
-                    if (oldState.board[row][col] === 0 && newState.board[row][col] === 2) {
-                        this.startAnimation(col, row, 2);
-                        return;
-                    }
-                }
-            }
-        }
-
-        // Check for win and create particles
-        if (newState.gameOver && newState.winner !== 0) {
-            this.createWinParticles();
-        }
-    }
-
-    createWinParticles() {
-        for (let i = 0; i < 100; i++) {
-            this.particles.push({
-                x: this.canvas.width / 2,
-                y: this.canvas.height / 2,
-                vx: (Math.random() - 0.5) * 10,
-                vy: (Math.random() - 0.5) * 10,
-                life: 100,
-                color: Math.random() > 0.5 ? this.colors.player1 : this.colors.player2
-            });
-        }
-    }
-
-    animate() {
-        this.draw();
-        requestAnimationFrame(() => this.animate());
-    }
-
-    draw() {
-        // Clear canvas
-        this.ctx.fillStyle = '#1e3c72';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-
-        // Draw board
-        this.drawBoard();
-
-        // Draw hover preview
-        if (this.hoverCol !== -1 && this.boardState && !this.boardState.gameOver && this.boardState.currentPlayer === 1 && !this.animatingPiece) {
-            this.drawHoverPreview();
-        }
-
-        // Draw animating piece
-        if (this.animatingPiece) {
-            this.updateAnimation();
-            this.drawAnimatingPiece();
-        }
-
-        // Draw particles
-        this.updateParticles();
-        this.drawParticles();
-    }
-
-    drawBoard() {
-        for (let row = 0; row < this.rows; row++) {
-            for (let col = 0; col < this.cols; col++) {
-                const x = col * this.cellSize + this.cellSize / 2;
-                const y = (this.rows - row) * this.cellSize + this.cellSize / 2;
-
-                const cellValue = this.boardState ? this.boardState.board[row][col] : 0;
-                let color = this.colors.empty;
-
-                if (cellValue === 1) {
-                    color = this.colors.player1;
-                } else if (cellValue === 2) {
-                    color = this.colors.player2;
-                }
-
-                // Draw piece with glow effect
-                if (cellValue !== 0) {
-                    const gradient = this.ctx.createRadialGradient(x, y, 0, x, y, this.radius);
-                    gradient.addColorStop(0, color);
-                    gradient.addColorStop(1, this.adjustColor(color, -30));
-                    this.ctx.fillStyle = gradient;
-                } else {
-                    this.ctx.fillStyle = color;
-                }
-
-                this.ctx.beginPath();
-                this.ctx.arc(x, y, this.radius, 0, Math.PI * 2);
-                this.ctx.fill();
-
-                // Add shine effect for placed pieces
-                if (cellValue !== 0) {
-                    const shineGradient = this.ctx.createRadialGradient(
-                        x - this.radius / 3, y - this.radius / 3, 0,
-                        x - this.radius / 3, y - this.radius / 3, this.radius / 2
-                    );
-                    shineGradient.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
-                    shineGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-                    this.ctx.fillStyle = shineGradient;
-                    this.ctx.beginPath();
-                    this.ctx.arc(x, y, this.radius, 0, Math.PI * 2);
-                    this.ctx.fill();
-                }
-            }
-        }
-    }
-
-    drawHoverPreview() {
-        const x = this.hoverCol * this.cellSize + this.cellSize / 2;
-        const y = this.cellSize / 2;
-
-        this.ctx.fillStyle = this.colors.hover1;
-        this.ctx.beginPath();
-        this.ctx.arc(x, y, this.radius, 0, Math.PI * 2);
-        this.ctx.fill();
-
-        // Draw column highlight
-        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-        this.ctx.fillRect(this.hoverCol * this.cellSize, this.cellSize, this.cellSize, this.rows * this.cellSize);
-    }
-
-    updateAnimation() {
-        if (!this.animatingPiece) return;
-
-        this.animatingPiece.velocity += this.animatingPiece.gravity;
-        this.animatingPiece.currentY += this.animatingPiece.velocity;
-
-        if (this.animatingPiece.currentY >= this.animatingPiece.targetY) {
-            this.animatingPiece.currentY = this.animatingPiece.targetY;
-            this.animatingPiece = null;
-        }
-    }
-
-    drawAnimatingPiece() {
-        if (!this.animatingPiece) return;
-
-        const x = this.animatingPiece.col * this.cellSize + this.cellSize / 2;
-        const y = this.animatingPiece.currentY;
-        const color = this.animatingPiece.player === 1 ? this.colors.player1 : this.colors.player2;
-
-        const gradient = this.ctx.createRadialGradient(x, y, 0, x, y, this.radius);
-        gradient.addColorStop(0, color);
-        gradient.addColorStop(1, this.adjustColor(color, -30));
-        this.ctx.fillStyle = gradient;
-
-        this.ctx.beginPath();
-        this.ctx.arc(x, y, this.radius, 0, Math.PI * 2);
-        this.ctx.fill();
-
-        // Add motion blur effect
-        this.ctx.shadowBlur = Math.min(this.animatingPiece.velocity * 2, 20);
-        this.ctx.shadowColor = color;
-    }
-
-    updateParticles() {
-        this.particles = this.particles.filter(p => {
-            p.x += p.vx;
-            p.y += p.vy;
-            p.vy += 0.2;
-            p.life--;
-            return p.life > 0;
-        });
-    }
-
-    drawParticles() {
-        this.particles.forEach(p => {
-            this.ctx.fillStyle = p.color;
-            this.ctx.globalAlpha = p.life / 100;
-            this.ctx.beginPath();
-            this.ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
-            this.ctx.fill();
-        });
-        this.ctx.globalAlpha = 1;
-    }
-
-    adjustColor(color, amount) {
-        const num = parseInt(color.slice(1), 16);
-        const r = Math.max(0, Math.min(255, (num >> 16) + amount));
-        const g = Math.max(0, Math.min(255, ((num >> 8) & 0x00FF) + amount));
-        const b = Math.max(0, Math.min(255, (num & 0x0000FF) + amount));
-        return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
-    }
+* {
+    font-family: 'Poppins', sans-serif;
 }
 
-// Initialize game with retry mechanism for Gradio
-function initializeGame() {
-    const canvas = document.getElementById('game-board-canvas');
-    if (canvas && !window.game) {
-        try {
-            window.game = new Connect4Game();
-            console.log('Connect4 game initialized successfully');
-
-            // Initialize with empty board
-            const initialState = {
-                board: Array(6).fill(null).map(() => Array(7).fill(0)),
-                currentPlayer: 1,
-                gameOver: false,
-                winner: null,
-                winningCells: [],
-                player1Score: 0,
-                player2Score: 0
-            };
-            window.game.updateBoard(JSON.stringify(initialState));
-        } catch (e) {
-            console.error('Failed to initialize game:', e);
-        }
-    } else if (!canvas) {
-        // Retry if canvas not found
-        setTimeout(initializeGame, 100);
-    }
+.gradio-container {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
 }
 
-// Multiple initialization attempts
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeGame);
-} else {
-    initializeGame();
+#main-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
 }
 
-// Also try on window load
-window.addEventListener('load', initializeGame);
+#game-board {
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    transition: transform 0.3s ease;
+    cursor: pointer;
+}
 
-// Watch for Gradio's dynamic content
-setTimeout(initializeGame, 500);
-setTimeout(initializeGame, 1000);
-setTimeout(initializeGame, 2000);
-</script>
+#game-board:hover {
+    transform: translateY(-5px);
+}
+
+.status-box {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 15px;
+    padding: 25px;
+    margin: 20px 0;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(10px);
+    text-align: center;
+}
+
+.status-box h3 {
+    color: #667eea;
+    margin: 0 0 10px 0;
+    font-size: 1.8em;
+}
+
+.status-box p {
+    color: #2c3e50;
+    font-size: 1.2em;
+    margin: 10px 0;
+}
+
+.controls-box {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    padding: 20px;
+    margin: 20px 0;
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.instructions {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    padding: 20px;
+    margin: 20px 0;
+    color: white;
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.instructions h3 {
+    color: white;
+    margin-top: 0;
+}
+
+button {
+    border-radius: 25px !important;
+    font-weight: 600 !important;
+    transition: all 0.3s ease !important;
+}
+
+button:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3) !important;
+}
 """
 
 # Create Gradio interface
-with gr.Blocks(title="Connect 4 AI - Beautiful Edition", theme=gr.themes.Soft()) as demo:
+with gr.Blocks(css=custom_css, title="Connect 4 AI - Beautiful Edition", theme=gr.themes.Soft()) as demo:
+
     game_state = gr.State(create_initial_state())
 
-    gr.HTML(custom_css)
-
-    with gr.Column(elem_id="game-container"):
+    with gr.Column(elem_id="main-container"):
         gr.HTML("""
-            <div class="game-header">
-                <h1>🎮 Connect 4 AI</h1>
-                <p style="font-size: 1.2em; margin: 10px 0;">Play against an intelligent AI with beautiful animations!</p>
+            <div style="text-align: center; color: white; margin-bottom: 20px;">
+                <h1 style="font-size: 3em; margin: 0; text-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                    🎮 Connect 4 AI
+                </h1>
+                <p style="font-size: 1.3em; margin: 10px 0;">
+                    Click directly on the board to play!
+                </p>
             </div>
         """)
 
-        # Game board canvas
-        gr.HTML('''
-            <div style="text-align: center; margin: 20px 0;">
-                <canvas id="game-board-canvas"
-                        width="560"
-                        height="560"
-                        style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-                               border-radius: 20px;
-                               box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-                               cursor: pointer;
-                               display: block;
-                               margin: 0 auto;
-                               max-width: 100%;">
-                    Your browser does not support the canvas element.
-                </canvas>
-            </div>
-        ''')
-
-        # Status panel
-        with gr.Column(elem_class="status-panel"):
-            status_display = gr.HTML(value="""
-                <div class="status-message">🔴 Your Turn - Click a column!</div>
-                <div class="score-display">
-                    <div class="player-score">🔴 You: 0</div>
-                    <div class="player-score">🟠 AI: 0</div>
-                </div>
-            """)
-
-        # Controls
-        with gr.Row():
-            difficulty = gr.Radio(
-                choices=[
-                    "Easy (2 moves)",
-                    "Medium (4 moves)",
-                    "Hard (6 moves)",
-                    "Expert (8 moves)",
-                ],
-                value="Medium (4 moves)",
-                label="🎯 AI Difficulty",
-                scale=2
-            )
-
-            with gr.Column(scale=1):
-                reset_btn = gr.Button("🔄 New Game", size="lg", variant="primary")
-
-        gr.HTML("""
-            <div class="status-panel">
-                <h3>📖 How to Play</h3>
-                <p>Click directly on any column to drop your red piece. Connect 4 pieces horizontally, vertically, or diagonally to win!</p>
-                <p><strong>💡 Tip:</strong> Hover over columns to see where your piece will land.</p>
-            </div>
-        """)
-
-    # Hidden component to trigger board updates
-    board_state_json = gr.Textbox(value=json.dumps(get_board_state_json(create_initial_state())), visible=False)
-
-    # JavaScript communication
-    gr.HTML(custom_js)
-
-    # Update status display based on game state
-    def update_status(state_json):
-        state = json.loads(state_json)
-        if state['gameOver']:
-            if state['winner'] == 1:
-                status_msg = '🎉 You Win! Congratulations!'
-            elif state['winner'] == 2:
-                status_msg = '🤖 AI Wins! Try again!'
-            else:
-                status_msg = '🤝 It\'s a Draw!'
-        elif state['currentPlayer'] == 1:
-            status_msg = '🔴 Your Turn - Click a column!'
-        else:
-            status_msg = '🟠 AI is thinking...'
-
-        return f"""
-            <div class="status-message">{status_msg}</div>
-            <div class="score-display">
-                <div class="player-score">🔴 You: {state['player1Score']}</div>
-                <div class="player-score">🟠 AI: {state['player2Score']}</div>
-            </div>
-        """
-
-    # Update board when state changes
-    board_state_json.change(
-        fn=update_status,
-        inputs=[board_state_json],
-        outputs=[status_display],
-        js="""
-        (stateJson) => {
-            if (window.game) {
-                window.game.updateBoard(stateJson);
-            }
-            return stateJson;
-        }
-        """
-    )
-
-    # Create column buttons (hidden but functional)
-    col_buttons = []
-    with gr.Row(visible=False):
-        for i in range(7):
-            btn = gr.Button(f"Col{i}", elem_id=f"col-btn-{i}")
-            col_buttons.append(btn)
-
-    # Play move function
-    def handle_move(col_idx, state, diff):
-        state, board_json = play_move(col_idx, state, diff)
-        return state, board_json
-
-    # Connect column buttons to handler
-    for idx, btn in enumerate(col_buttons):
-        btn.click(
-            fn=lambda state, diff, i=idx: handle_move(i, state, diff),
-            inputs=[game_state, difficulty],
-            outputs=[game_state, board_state_json]
+        # Game board - clickable image
+        board_image = gr.Image(
+            value=create_beautiful_board(create_initial_state()),
+            label="",
+            type="pil",
+            interactive=True,
+            elem_id="game-board",
+            show_label=False,
+            show_download_button=False,
+            show_share_button=False,
+            container=False
         )
 
-    # Reset game
-    def handle_reset(diff, state):
-        state, board_json = reset_game(diff, state)
-        return state, board_json
+        # Status display
+        with gr.Column(elem_class="status-box"):
+            status_text = gr.Markdown(
+                value=get_game_status(create_initial_state()),
+                elem_classes=["status-text"]
+            )
+            score_text = gr.Markdown(
+                value=get_score_display(create_initial_state()),
+                elem_classes=["score-text"]
+            )
 
-    reset_btn.click(
-        fn=handle_reset,
-        inputs=[difficulty, game_state],
-        outputs=[game_state, board_state_json]
+        # Controls
+        with gr.Column(elem_class="controls-box"):
+            with gr.Row():
+                difficulty = gr.Radio(
+                    choices=[
+                        "Easy (2 moves)",
+                        "Medium (4 moves)",
+                        "Hard (6 moves)",
+                        "Expert (8 moves)",
+                    ],
+                    value="Medium (4 moves)",
+                    label="🎯 AI Difficulty",
+                    scale=2
+                )
+
+                reset_button = gr.Button(
+                    "🔄 New Game",
+                    variant="primary",
+                    size="lg",
+                    scale=1
+                )
+
+        # Instructions
+        gr.HTML("""
+            <div class="instructions">
+                <h3>📖 How to Play</h3>
+                <p><strong>• Click directly on any column</strong> on the board to drop your red piece</p>
+                <p><strong>• Connect 4 pieces</strong> horizontally, vertically, or diagonally to win!</p>
+                <p><strong>• AI responds automatically</strong> after your move</p>
+                <br>
+                <h3>🎯 Difficulty Levels</h3>
+                <p>• <strong>Easy:</strong> Thinks 2 moves ahead</p>
+                <p>• <strong>Medium:</strong> Thinks 4 moves ahead ⭐</p>
+                <p>• <strong>Hard:</strong> Thinks 6 moves ahead</p>
+                <p>• <strong>Expert:</strong> Thinks 8 moves ahead (slower but very smart!)</p>
+            </div>
+        """)
+
+    # Event handlers
+    board_image.select(
+        fn=handle_click,
+        inputs=[game_state, difficulty],
+        outputs=[game_state, board_image, status_text, score_text]
     )
 
-    # JavaScript to trigger column buttons and initialize on load
-    gr.HTML("""
-    <script>
-    window.playMove = function(col) {
-        const btn = document.getElementById('col-btn-' + col);
-        if (btn) {
-            btn.click();
-        }
-    };
-
-    // Force initialization after a delay to ensure DOM is ready
-    setTimeout(() => {
-        console.log('Forcing game initialization...');
-        if (typeof initializeGame === 'function') {
-            initializeGame();
-        }
-    }, 1500);
-    </script>
-    """)
-
-    # Trigger initial board state on load
-    demo.load(
-        fn=lambda: json.dumps(get_board_state_json(create_initial_state())),
-        outputs=[board_state_json],
-        js="""
-        () => {
-            console.log('Demo loaded, initializing game...');
-            setTimeout(() => {
-                if (typeof initializeGame === 'function') {
-                    initializeGame();
-                }
-            }, 100);
-            return null;
-        }
-        """
+    reset_button.click(
+        fn=reset_game,
+        inputs=[difficulty, game_state],
+        outputs=[game_state, board_image, status_text, score_text]
     )
 
 if __name__ == "__main__":
